@@ -8,7 +8,7 @@ Edited on 05/14/2017.
 import re
 import pprint
 import schedule
-import requests, time, sys, os
+import requests, time, sys, os, random, json
 from multiprocessing import Process, Queue
 from bs4 import BeautifulSoup as bs
 
@@ -67,6 +67,35 @@ def replace_kdol(category):
     elif category == '347959614':
         return '<font style=\"color:#5f00bf\">아스트로</font>'
     return category
+
+#엑소, 잉피, 방탄
+def get_kdol1(q, kdol):
+    if kdol == 'exo':
+        const_url = 'http://theqoo.net/index.php?mid=exo&filter_mode=normal&page='
+        name = '<b><font style=\"color:#778899\">엑소</font></b>'
+    elif kdol == 'ifnt':
+        const_url = 'http://theqoo.net/index.php?mid=infinite&filter_mode=normal&page='
+        name = '<b><font style=\"color:#E6CC54\">인피니트</font></b>'
+    else:
+        const_url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=55140133&page='
+        name = '<b>방탄소년단</b>'
+
+    s = requests.session()
+    i = 1
+    while (1):
+        url = const_url + str(i)
+        tempHtml = s.get(url).text.replace(replace_string, '')
+        if tempHtml.find(prev_date) != -1:  break
+        i += 5
+
+    while (1):
+        i -= 1
+        url = const_url + str(i)
+        tempHtml = requests.get(url).text.replace(replace_string, '')
+        if tempHtml.find(prev_date) == -1: break
+
+    print(i, name)
+    q.put([i, name])
 
 #샤이니 ~ 소시
 def get_kdol2(q):
@@ -140,62 +169,6 @@ def get_kdol3(q):
         print(i - 1, '<b>' + replace_kdol(category) + '</b>')
         q.put([i-1, '<b>' + replace_kdol(category) + '</b>'])
 
-#인피니트
-def get_simple_ifnt(q):
-    s = requests.session()
-    i = 1
-    while (1):
-        url = 'http://theqoo.net/index.php?mid=infinite&filter_mode=normal&page=' + str(i)
-        tempHtml = s.get(url).text.replace(replace_string, '')
-        if tempHtml.find(prev_date) != -1:  break
-        i += 5
-
-    while(1):
-        i -= 1
-        url = 'http://theqoo.net/index.php?mid=infinite&filter_mode=normal&page=' + str(i)
-        tempHtml = requests.get(url).text.replace(replace_string, '')
-        if tempHtml.find(prev_date) == -1: break
-    print(i, '<b><font style=\"color:#E6CC54\">인피니트</font></b>')
-    q.put([i, '<b><font style=\"color:#E6CC54\">인피니트</font></b>'])
-
-#엑소
-def get_simple_exo(q):
-    s = requests.session()
-    i = 1
-    while (1):
-        url = 'http://theqoo.net/index.php?mid=exo&filter_mode=normal&page=' + str(i)
-        tempHtml = s.get(url).text.replace(replace_string, '')
-        if tempHtml.find(prev_date) != -1:  break
-        i += 5
-
-    while (1):
-        i -= 1
-        url = 'http://theqoo.net/index.php?mid=exo&filter_mode=normal&page=' + str(i)
-        tempHtml = requests.get(url).text.replace(replace_string, '')
-        if tempHtml.find(prev_date) == -1: break
-
-    print(i, '<b><font style=\"color:#778899\">엑소</font></b>')
-    q.put([i, '<b><font style=\"color:#778899\">엑소</font></b>'])
-
-#방탄
-def get_simple_bts(q):
-    s = requests.session()
-    i = 1
-    while (1):
-        url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=55140133&page=' + str(i)
-        tempHtml = s.get(url).text.replace(replace_string, '')
-        if tempHtml.find(prev_date) != -1:  break
-        i += 5
-
-    while (1):
-        i -= 1
-        url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=55140133&page=' + str(i)
-        tempHtml = requests.get(url).text.replace(replace_string, '')
-        if tempHtml.find(prev_date) == -1: break
-
-    print(i, '<b>방탄소년단</b>')
-    q.put([i, '<b>방탄소년단</b>'])
-
 def GetItemList(q):
     ret=[]
     n=q.qsize()
@@ -231,7 +204,7 @@ def login():
         return s
     else:
         print('Login Fail!')
-        sys.exit(input('엔터를 누르면 종료됩니다..'))
+        login()
 
 def write(s, xml):
     url = 'http://theqoo.net/index.php?mid=test&act=dispBoardWrite'
@@ -243,8 +216,7 @@ def write(s, xml):
     p = re.compile('<document_srl>[0-9]*')
     m = p.search(tmp)
     document_srl = m.group().split('<document_srl>')[1]
-    os.system('explorer http://theqoo.net/' + str(document_srl))
-    print('http://theqoo.net/' + str(document_srl))
+    return document_srl
 
 def make_xml(subject, memo, category_srl):
     if category_srl == '1':
@@ -256,18 +228,47 @@ def make_xml(subject, memo, category_srl):
     else:
         mid = 'test'
     xml = """﻿<?xml version="1.0" encoding="UTF-8"?><methodCall><params><_filter><![CDATA[insert]]></_filter><category_srl><![CDATA[""" + str(category_srl) + """]]></category_srl><error_return_url><![CDATA[/index.php?mid=test&act=dispBoardWrite]]></error_return_url><act><![CDATA[procBoardInsertDocument]]></act><mid><![CDATA[""" + mid + """]]></mid><content><![CDATA[""" + memo + """]]></content><title><![CDATA[""" + subject + """]]></title><_saved_doc_message><![CDATA[자동 저장된 글이 있습니다. 복구하시겠습니까? 글을 다 쓰신 후 저장하면 자동 저장 본은 사라집니다.]]></_saved_doc_message><comment_status><![CDATA[ALLOW]]></comment_status><status><![CDATA[PUBLIC]]></status><module><![CDATA[board]]></module></params></methodCall>"""
+    return xml, mid
+
+def write2(s, xml, document_srl):
+    url = 'http://theqoo.net/index.php?mid=test&act=procBoardInsertComment'
+    s.get(url)
+    url = 'http://theqoo.net/index.php'
+    s.headers['Content-Type'] = 'application/xml'
+    s.headers['Referer'] = 'http://theqoo.net/index.php?mid=test&act=procBoardInsertComment'
+    tmp = s.post(url, data=xml.encode('utf-8')).text
+    '''
+    print(tmp)
+    p = re.compile('<document_srl><![CDATA[[0-9]*]]></document_srl>')
+    m = p.search(tmp)
+    document_srl = m.group().split('<![CDATA[')[1].split(']')[0]
+    '''
+    os.system('explorer http://theqoo.net/' + str(document_srl))
+    print('http://theqoo.net/' + str(document_srl))
+
+def make_xml2(mid, memo, document_srl):
+    xml = """<?xml version="1.0" encoding="utf-8" ?><methodCall><params><_filter><![CDATA[insert_comment]]></_filter><error_return_url><![CDATA[/index.php?mid=""" + mid + """&filter_mode=normal&document_srl=""" + document_srl + """]]></error_return_url><mid><![CDATA[""" + mid + """]]></mid><document_srl><![CDATA[""" + document_srl + """]]></document_srl><content><![CDATA[""" + memo + """]]></content><module><![CDATA[board]]></module><act><![CDATA[procBoardInsertComment]]></act></params></methodCall>"""
     return xml
 
+def json_loading():
+    json_load = requests.get('http://lovelyz.gtz.kr/theqoo.json').text
+    b = json.loads(json_load)
+    i = random.randrange(0, len(b))
+    j = random.randrange(0, len(b[i]['img']))
+    tmpStr = b[i]['memo'] + '<br><img src="' + b[i]['img'][j] + '" />'
+    return tmpStr
+
 def main():
-    s = login()
     ss = time.strftime("%y%m%d %H:%M:%S", time.localtime())
+    t = time.localtime(time.time() - 86400)
+    yesterday = time.strftime("%y%m%d", t)
     print('프로그램 실행 시각: ' + str(ss))
 
     q = Queue()
     procs = []
-    procs.append(Process(target=get_simple_exo, args=(q,)))
-    procs.append(Process(target=get_simple_bts, args=(q,)))
-    procs.append(Process(target=get_simple_ifnt, args=(q,)))
+    procs.append(Process(target=get_kdol1, args=(q,'exo')))
+    procs.append(Process(target=get_kdol1, args=(q,'bts')))
+    procs.append(Process(target=get_kdol1, args=(q,'ifnt')))
     procs.append(Process(target=get_kdol2, args=(q,)))
     procs.append(Process(target=get_kdol3, args=(q,)))
 
@@ -290,17 +291,19 @@ def main():
 
     for item in c.items():
         avg_page += item[0]
-        tmpStr = item[1] + ' ' + str(item[0]).replace('0', '1페이지 미만')
+        if str(item[0]) == '0':
+            tmpStr = item[1] + ' 1페이지 미만'
+        else:
+            tmpStr = item[1] + ' ' + str(item[0])
         all_lists.append(tmpStr)
 
     all_lists.append('<br>')
-    all_lists.append('* 프로그램 실행 시각 %s' % (ss))
+    all_lists.append('* 집계 기간: %s 00:00:00 ~ %s' % (yesterday, ss))
     all_lists.append('* 평균 페이지 수: %.2f' % (avg_page/24))
     b = "<br>".join(all_lists)
+    print(b)
 
-    t = time.localtime(time.time()-86400)
-    ss = time.strftime("%y%m%d", t)
-
+    s = login()
     print('---------------------------------')
     print('1. 케톡 잡담 카테고리')
     print('2. 케톡 스퀘어 카테고리')
@@ -308,8 +311,10 @@ def main():
     print('---------------------------------')
     tmpInt = input('숫자만 입력: ')
 
-    xml = make_xml('%s 카테별 페이지수' % ss, b, tmpInt)
-    write(s, xml)
+    xml, mid = make_xml('%s 카테별 페이지수' % yesterday, b, tmpInt)
+    document_srl = write(s, xml)
+    xml2 = make_xml2(mid, json_loading(), document_srl)
+    write2(s, xml2, document_srl)
     sys.exit(input('엔터를 누르면 프로그램이 종료됩니다..'))
 
 
