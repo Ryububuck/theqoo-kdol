@@ -6,17 +6,51 @@ Edited on 05/14/2017.
 '''
 
 import re
-import pprint
-import schedule
 import requests, time, sys, os, random, json
-from multiprocessing import Process, Queue
 from bs4 import BeautifulSoup as bs
 
+# Module multiprocessing is organized differently in Python 3.4+
+try:
+    # Python 3.4+
+    if sys.platform.startswith('win'):
+        import multiprocessing.popen_spawn_win32 as forking
+    else:
+        import multiprocessing.popen_fork as forking
+except ImportError:
+    import multiprocessing.forking as forking
+
+if sys.platform.startswith('win'):
+    # First define a modified version of Popen.
+    class _Popen(forking.Popen):
+        def __init__(self, *args, **kw):
+            if hasattr(sys, 'frozen'):
+                # We have to set original _MEIPASS2 value from sys._MEIPASS
+                # to get --onefile mode working.
+                os.putenv('_MEIPASS2', sys._MEIPASS)
+            try:
+                super(_Popen, self).__init__(*args, **kw)
+            finally:
+                if hasattr(sys, 'frozen'):
+                    # On some platforms (e.g. AIX) 'os.unsetenv()' is not
+                    # available. In those cases we cannot delete the variable
+                    # but only set it to the empty string. The bootloader
+                    # can handle this case.
+                    if hasattr(os, 'unsetenv'):
+                        os.unsetenv('_MEIPASS2')
+                    else:
+                        os.putenv('_MEIPASS2', '')
+
+    # Second override 'Popen' class with our modified version.
+    forking.Popen = _Popen
+
+from multiprocessing import freeze_support, Process, Queue
 
 global replace_string
-global prev_date, pre_pre_date
+global prev_date, pre_pre_date, yes_day
+tt = time.localtime(time.time() - 86400)
 t = time.localtime(time.time() - 86400 * 2)
 t2 = time.localtime(time.time() - 86400 * 3)
+yes_day = "17.%02d.%02d" % (tt.tm_mon, tt.tm_mday)
 prev_date = "17.%02d.%02d" % (t.tm_mon, t.tm_mday)  # 2일 전 발견하면 q.put
 pre_pre_date = "17.%02d.%02d" % (t2.tm_mon, t2.tm_mday)  # 3일 전 발견하면 q.put
 replace_string = "%04d.%02d" % (t.tm_year, t.tm_mon)
@@ -148,7 +182,7 @@ def get_kdol3(q):
     for category in kdol_cate:
         url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&page=1&category=' + str(category)
         html = s.get(url).text.replace(replace_string, '')
-        if html.find(prev_date) != -1:  # 2일전 찾음: 0 출력(1페이지 미만)
+        if html.find(prev_date) != -1 or html.find(pre_pre_date) != -1:  # 2(3)일전 찾음: 0 출력(1페이지 미만)
             print('0', replace_kdol(category))
             q.put([0, '<b>' + replace_kdol(category) + '</b>'])
             continue
@@ -260,8 +294,8 @@ def json_loading():
 
 def main():
     ss = time.strftime("%y%m%d %H:%M:%S", time.localtime())
-    t = time.localtime(time.time() - 86400)
-    yesterday = time.strftime("%y%m%d", t)
+
+    yesterday = time.strftime("%y%m%d", tt)
     print('프로그램 실행 시각: ' + str(ss))
 
     q = Queue()
@@ -318,4 +352,6 @@ def main():
     sys.exit(input('엔터를 누르면 프로그램이 종료됩니다..'))
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    freeze_support()
+    main()
