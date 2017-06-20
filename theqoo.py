@@ -1,59 +1,25 @@
 # -*- coding: utf-8 -*-
 '''
-Edited on 05/14/2017.
+Edited on 05/28/2017.
 @author: Ryububuck
 @License: GPL 3.0
 '''
-
+import sys
 import re
-import requests, time, sys, os, random, json
-from bs4 import BeautifulSoup as bs
-
-# Module multiprocessing is organized differently in Python 3.4+
-try:
-    # Python 3.4+
-    if sys.platform.startswith('win'):
-        import multiprocessing.popen_spawn_win32 as forking
-    else:
-        import multiprocessing.popen_fork as forking
-except ImportError:
-    import multiprocessing.forking as forking
-
-if sys.platform.startswith('win'):
-    # First define a modified version of Popen.
-    class _Popen(forking.Popen):
-        def __init__(self, *args, **kw):
-            if hasattr(sys, 'frozen'):
-                # We have to set original _MEIPASS2 value from sys._MEIPASS
-                # to get --onefile mode working.
-                os.putenv('_MEIPASS2', sys._MEIPASS)
-            try:
-                super(_Popen, self).__init__(*args, **kw)
-            finally:
-                if hasattr(sys, 'frozen'):
-                    # On some platforms (e.g. AIX) 'os.unsetenv()' is not
-                    # available. In those cases we cannot delete the variable
-                    # but only set it to the empty string. The bootloader
-                    # can handle this case.
-                    if hasattr(os, 'unsetenv'):
-                        os.unsetenv('_MEIPASS2')
-                    else:
-                        os.putenv('_MEIPASS2', '')
-
-    # Second override 'Popen' class with our modified version.
-    forking.Popen = _Popen
-
-from multiprocessing import freeze_support, Process, Queue
+import requests, time, random, json
+from multiprocessing import Process, Queue
+from pprint import pprint
 
 global replace_string
 global prev_date, pre_pre_date, yes_day
-tt = time.localtime(time.time() - 86400)
-t = time.localtime(time.time() - 86400 * 2)
-t2 = time.localtime(time.time() - 86400 * 3)
+
+tmpAWStime = time.time()
+tt = time.localtime(tmpAWStime - 86400)
+t = time.localtime(tmpAWStime - 86400 * 2)
+t2 = time.localtime(tmpAWStime - 86400 * 3)
 yes_day = "17.%02d.%02d" % (tt.tm_mon, tt.tm_mday)
 prev_date = "17.%02d.%02d" % (t.tm_mon, t.tm_mday)  # 2일 전 발견하면 q.put
 pre_pre_date = "17.%02d.%02d" % (t2.tm_mon, t2.tm_mday)  # 3일 전 발견하면 q.put
-replace_string = "%04d.%02d" % (t.tm_year, t.tm_mon)
 
 def replace_kdol(category):
     if category == '55140133':
@@ -102,7 +68,7 @@ def replace_kdol(category):
         return '<font style=\"color:#5f00bf\">아스트로</font>'
     return category
 
-#엑소, 잉피, 방탄
+#엑소, 잉피, 방탄, 뉴이스트
 def get_kdol1(q, kdol):
     if kdol == 'exo':
         const_url = 'http://theqoo.net/index.php?mid=exo&filter_mode=normal&page='
@@ -110,6 +76,9 @@ def get_kdol1(q, kdol):
     elif kdol == 'ifnt':
         const_url = 'http://theqoo.net/index.php?mid=infinite&filter_mode=normal&page='
         name = '<b><font style=\"color:#E6CC54\">인피니트</font></b>'
+    elif kdol == 'nuest':
+        const_url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=488530124&page='
+        name = '<b><font style=\"color:#e81ee8\">뉴이스트</font></b>'
     else:
         const_url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=55140133&page='
         name = '<b>방탄소년단</b>'
@@ -173,9 +142,10 @@ def get_kdol3(q):
         '161636969', #위너
         '244186435', #비투비
         '388541893', #여친
-        '244186465', #트와
         '369461587', #펜타곤
-        '347959614' #아스트로
+        '347959614', #아스트로,
+        '490141128', #데이식스
+        '490139957' #몬스타엑스
     ]
 
 
@@ -214,21 +184,21 @@ def GetItemList(q):
     return ret
 
 def login():
-    user_id = input('더쿠 아이디: ')
-    user_pw = input('더쿠 비밀번호: ')
+    user_id = input('아이디: ')
+    user_pw = input('비밀번호: ')
     s = requests.session()
     s.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko'
     s.headers['Host'] = 'theqoo.net'
 
-    url = 'http://theqoo.net/index.php?mid=main&act=dispMemberLoginForm'
+    url = 'http://theqoo.net/index.php?mid=index&act=dispMemberLoginForm'
     data = {
-        'error_return_url': '%2Findex.php%3Fmid%3Dmain%26act%3DdispMemberLoginForm',
-        'mid': 'main',
+        'error_return_url': '/index.php?mid=index&act=dispMemberLoginForm',
+        'mid': 'index',
         'vid': '',
         'ruleset': '@login',
-        'success_return_url': 'http://theqoo.net/main',
+        'success_return_url': 'http://theqoo.net/',
         'act': 'procMemberLogin',
-        'xe_validator_id': 'modules%2Fmember%2Fskins%2Fsketchbook5_member_skin%2F1',
+        'xe_validator_id': 'modules/member/skins/sketchbook5_member_skin/1',
         'user_id': user_id,
         'password': user_pw
     }
@@ -271,13 +241,6 @@ def write2(s, xml, document_srl):
     s.headers['Content-Type'] = 'application/xml'
     s.headers['Referer'] = 'http://theqoo.net/index.php?mid=test&act=procBoardInsertComment'
     tmp = s.post(url, data=xml.encode('utf-8')).text
-    '''
-    print(tmp)
-    p = re.compile('<document_srl><![CDATA[[0-9]*]]></document_srl>')
-    m = p.search(tmp)
-    document_srl = m.group().split('<![CDATA[')[1].split(']')[0]
-    '''
-    os.system('explorer http://theqoo.net/' + str(document_srl))
     print('http://theqoo.net/' + str(document_srl))
 
 def make_xml2(mid, memo, document_srl):
@@ -293,7 +256,7 @@ def json_loading():
     return tmpStr
 
 def main():
-    ss = time.strftime("%y%m%d %H:%M:%S", time.localtime())
+    ss = time.strftime("%y%m%d %H:%M:%S", time.localtime(tmpAWStime))
 
     yesterday = time.strftime("%y%m%d", tt)
     print('프로그램 실행 시각: ' + str(ss))
@@ -303,6 +266,7 @@ def main():
     procs.append(Process(target=get_kdol1, args=(q,'exo')))
     procs.append(Process(target=get_kdol1, args=(q,'bts')))
     procs.append(Process(target=get_kdol1, args=(q,'ifnt')))
+    procs.append(Process(target=get_kdol1, args=(q, 'nuest')))
     procs.append(Process(target=get_kdol2, args=(q,)))
     procs.append(Process(target=get_kdol3, args=(q,)))
 
@@ -323,7 +287,10 @@ def main():
         except:
             c[i] = name
 
-    for item in c.items():
+    tmpArr = sorted(c.items())
+    tmpArr.reverse()
+
+    for item in tmpArr:
         avg_page += item[0]
         if str(item[0]) == '0':
             tmpStr = item[1] + ' 1페이지 미만'
@@ -334,24 +301,19 @@ def main():
     all_lists.append('<br>')
     all_lists.append('* 집계 기간: %s 00:00:00 ~ %s' % (yesterday, ss))
     all_lists.append('* 평균 페이지 수: %.2f' % (avg_page/24))
-    b = "<br>".join(all_lists)
+
+    b = "<br />".join(all_lists)
+    print('\n\n\n')
     print(b)
+    print('\n\n\n')
 
     s = login()
-    print('---------------------------------')
-    print('1. 케톡 잡담 카테고리')
-    print('2. 케톡 스퀘어 카테고리')
-    print('3. 테스트방 (본인만 볼 수 있음)')
-    print('---------------------------------')
-    tmpInt = input('숫자만 입력: ')
+    tmpInt = 1
 
-    xml, mid = make_xml('%s 카테별 페이지수' % yesterday, b, tmpInt)
+    xml, mid = make_xml('(테스트중) %s 카테별 페이지수' % yesterday, b, tmpInt)
     document_srl = write(s, xml)
-    xml2 = make_xml2(mid, json_loading(), document_srl)
-    write2(s, xml2, document_srl)
-    sys.exit(input('엔터를 누르면 프로그램이 종료됩니다..'))
+    #xml2 = make_xml2(mid, json_loading(), document_srl)
+    #write2(s, xml2, document_srl)
+    return 0
 
-
-if __name__ == "__main__":
-    freeze_support()
-    main()
+if __name__ == "__main__":  main()
