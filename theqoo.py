@@ -1,30 +1,23 @@
 # -*- coding: utf-8 -*-
 '''
-Edited on 05/28/2017.
+Edited on 07/22/2017.
 @author: Ryububuck
 @License: GPL 3.0
 '''
-import sys
-import re
-import requests, time, random, json
+from bs4 import BeautifulSoup as bs
 from multiprocessing import Process, Queue
-from pprint import pprint
+import requests, time, random, json, re
 
-global replace_string
-global prev_date, pre_pre_date, yes_day
-
-tmpAWStime = time.time()
-tt = time.localtime(tmpAWStime - 86400)
-t = time.localtime(tmpAWStime - 86400 * 2)
-t2 = time.localtime(tmpAWStime - 86400 * 3)
-yes_day = "17.%02d.%02d" % (tt.tm_mon, tt.tm_mday)
-prev_date = "17.%02d.%02d" % (t.tm_mon, t.tm_mday)  # 2일 전 발견하면 q.put
-pre_pre_date = "17.%02d.%02d" % (t2.tm_mon, t2.tm_mday)  # 3일 전 발견하면 q.put
+now = time.time()
+yday_time = time.localtime(now - 86400) #어제
+yyday_time = time.localtime(now - 86400 * 2) #2일전
+yyyday_time = time.localtime(now - 86400 * 3) #3일전
+findtxt = '%02d-%02d' % (yyday_time.tm_mon, yyday_time.tm_mday)
+findtxt2 = '%02d-%02d' % (yday_time.tm_mon, yday_time.tm_mday)
+ifntxt = '%02d-%02d' % (yyyday_time.tm_mon, yyyday_time.tm_mday)
 
 def replace_kdol(category):
-    if category == '55140133':
-        return '<font style=\"color:#c9c5c5\">방탄소년단</font>'
-    elif category == '38608002':
+    if category == '38608002':
         return '<font style=\"color:#79e5cb\">샤이니</font>'
     elif category == '85437064':
         return '<font style=\"color:#00bf5f\">GOT7</font>'
@@ -60,15 +53,25 @@ def replace_kdol(category):
         return '<font style=\"color:#005fbf\">비투비</font>'
     elif category == '388541893':
         return '<font style=\"color:#d4aaff\">여자친구</font>'
+    elif category == '347959614':
+        return '<font style=\"color:#5f00bf\">아스트로</font>'
+    elif category == '518965544':
+        return '<font style=\"color:#1ec91e\">마마무</font>'
+    elif category == '518960998':
+        return '<font style=\"color:gold\">골든차일드</font>'
+    elif category == '490141128':
+        return '<font style=\"color:#14bcbc\">데이식스</font>'
+    elif category == '490139957':
+        return '<font style=\"color:#333333\">몬스타엑스</font>'
+    elif category == '347959614':
+        return '<font style=\"color:#5f00bf\">아스트로</font>'
     elif category == '244186465':
         return '<font style=\"color:#ff1493\">트와이스</font>'
     elif category == '369461587':
         return '펜타곤'
-    elif category == '347959614':
-        return '<font style=\"color:#5f00bf\">아스트로</font>'
     return category
 
-#엑소, 잉피, 방탄, 뉴이스트
+# 엑소, 잉피, 방탄, 워너원, 늉
 def get_kdol1(q, kdol):
     if kdol == 'exo':
         const_url = 'http://theqoo.net/index.php?mid=exo&filter_mode=normal&page='
@@ -77,62 +80,64 @@ def get_kdol1(q, kdol):
         const_url = 'http://theqoo.net/index.php?mid=infinite&filter_mode=normal&page='
         name = '<b><font style=\"color:#E6CC54\">인피니트</font></b>'
     elif kdol == 'nuest':
-        const_url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=488530124&page='
+        const_url = 'http://theqoo.net/index.php?mid=nuest&filter_mode=normal&page='
         name = '<b><font style=\"color:#e81ee8\">뉴이스트</font></b>'
+    elif kdol == 'wannaone':
+        const_url = 'http://theqoo.net/index.php?mid=wannaone&filter_mode=normal&page='
+        name = '<b>워너원</b>'
     else:
-        const_url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=55140133&page='
-        name = '<b>방탄소년단</b>'
+        const_url = 'http://theqoo.net/index.php?mid=bts&filter_mode=normal&page='
+        name = '<b><font style=\"color:#c9c5c5\">방탄소년단</font></b>'
 
     s = requests.session()
+    s.headers['User-Agent'] = 'Mozilla/5.0 (Linux; U; Android 1.5; de-de; Galaxy Build/CUPCAKE) Mobile Safari/525.20.1'
     i = 1
+
     while (1):
-        url = const_url + str(i)
-        tempHtml = s.get(url).text.replace(replace_string, '')
-        if tempHtml.find(prev_date) != -1:  break
+        res = s.get(const_url + str(i))
+        html = bs(res.text, 'lxml')
+        lis = html.find_all('li', 'date el')
+        if str(lis).find(findtxt) != -1: break
+        if str(lis).find(ifntxt) != -1: break
         i += 5
 
     while (1):
         i -= 1
-        url = const_url + str(i)
-        tempHtml = requests.get(url).text.replace(replace_string, '')
-        if tempHtml.find(prev_date) == -1: break
+        res = s.get(const_url + str(i))
+        html = bs(res.text, 'lxml')
+        lis = html.find_all('li', 'date el')
+        if str(lis).find(findtxt) == -1:
+            print(i-1, name)
+            q.put([i-1, name])
+            return 0
 
-    print(i, name)
-    q.put([i, name])
-
-#샤이니 ~ 소시
+# 샤이니 ~ 소녀시대
 def get_kdol2(q):
+    kdol_cate = ['38608002', '85437064', '26699', '160145694', '38659297', '38659328', '186883457', '98188368']
+
     s = requests.session()
-    kdol_cate = ['38608002', '85437064', '26699', '160145694', '38659297', '38659328', '186883457', '98188368'] #샤이니 ~ 소녀시대 #
+    s.headers['User-Agent'] = 'Mozilla/5.0 (Linux; U; Android 1.5; de-de; Galaxy Build/CUPCAKE) Mobile Safari/525.20.1'
 
     for category in kdol_cate:
-        url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&page=1&category=' + str(category)
-        html = s.get(url).text.replace(replace_string, '')
-        if html.find(prev_date) != -1:  # 2일전 찾음: 0 출력(1페이지 미만)
-            print('0', replace_kdol(category))
-            q.put([0, '<b>' + replace_kdol(category) + '</b>'])
-            continue
-
-        i = 2
+        const_url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=' + str(category) + '&page='
+        i = 1
         while (1):
-            url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=' + str(category) + '&page=' + str(i)
-            tempHtml = s.get(url).text.replace(replace_string, '')
-            if tempHtml.find(prev_date) !=-1 or tempHtml.find(pre_pre_date) != -1:
-                url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=' + str(category) + '&page=' + str(i - 1)
-                tempHtml = requests.get(url).text.replace(replace_string, '')
-                if tempHtml.find(prev_date) != -1:
-                    i -= 1
-                    break
-                else: break
-            i += 2
-        print(i-1, '<b>' + replace_kdol(category) + '</b>')
-        q.put([i-1, '<b>' + replace_kdol(category) + '</b>'])
+            res = s.get(const_url + str(i))
+            html = bs(res.text, 'lxml')
+            lis = html.find_all('li', 'date el')
+            if str(lis).find(findtxt) != -1:
+                print(i - 1, '<b>' + replace_kdol(category) + '</b>')
+                q.put([i - 1, '<b>' + replace_kdol(category) + '</b>'])
+                break
+            i += 1
 
-#하이라이트 ~ 아스트로
+#하이라이트 ~ 맘무
 def get_kdol3(q):
     s = requests.session()
+    s.headers['User-Agent'] = 'Mozilla/5.0 (Linux; U; Android 1.5; de-de; Galaxy Build/CUPCAKE) Mobile Safari/525.20.1'
+
     kdol_cate = [
-        '161629987', #하이라이트
+        '161629987', #하라
         '136446617', #빅뱅
         '244170032', #엔씨티
         '250137634', #젝키
@@ -142,50 +147,76 @@ def get_kdol3(q):
         '161636969', #위너
         '244186435', #비투비
         '388541893', #여친
-        '369461587', #펜타곤
-        '347959614', #아스트로,
-        '490141128', #데이식스
-        '490139957' #몬스타엑스
+        '347959614', #아스트로
+        '490141128',  # 데이식스
+        '490139957',  # 몬스타엑스
+        '518960998', #골든차일드
+        '518965544' #마마무
     ]
 
 
     for category in kdol_cate:
-        url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&page=1&category=' + str(category)
-        html = s.get(url).text.replace(replace_string, '')
-        if html.find(prev_date) != -1 or html.find(pre_pre_date) != -1:  # 2(3)일전 찾음: 0 출력(1페이지 미만)
-            print('0', replace_kdol(category))
-            q.put([0, '<b>' + replace_kdol(category) + '</b>'])
-            continue
-
-
-        i = 2
+        const_url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=' + str(category) + '&page='
+        i = 1
         while (1):
-            url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=' + str(category) + '&page=' + str(i)
-            tempHtml = s.get(url).text.replace(replace_string, '')
-            if tempHtml.find(prev_date) !=-1 or tempHtml.find(pre_pre_date) != -1:
-                url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=' + str(category) + '&page=' + str(i - 1)
-                tempHtml = requests.get(url).text.replace(replace_string, '')
-                if tempHtml.find(prev_date) != -1:
-                    i -= 1
+            res = s.get(const_url + str(i))
+            html = bs(res.text, 'lxml')
+            lis = html.find_all('li', 'date el')
+            if str(lis).find(findtxt) != -1:
+                print(i - 1, '<b>' + replace_kdol(category) + '</b>')
+                q.put([i - 1, '<b>' + replace_kdol(category) + '</b>'])
+                break
+            elif str(lis).find(ifntxt) != -1:
+                if str(lis).find(findtxt) == -1:
+                    print(0, '<b>' + replace_kdol(category) + '</b>')
+                    q.put([0, '<b>' + replace_kdol(category) + '</b>'])
                     break
-                else: break
-            i += 2
-        print(i - 1, '<b>' + replace_kdol(category) + '</b>')
-        q.put([i-1, '<b>' + replace_kdol(category) + '</b>'])
+            i += 1
 
-def GetItemList(q):
+
+def SortList(q):
+    avg_page = 0
+    all_lists = []
     ret=[]
+
     n=q.qsize()
     while n > 0:
         ret.append(q.get())
         n -= 1
     ret.sort()
     ret.reverse()
-    return ret
+
+    c = {}
+    for item in ret:
+        i = item[0]
+        name = item[1]
+        try:
+            c[i] = c[i] + ', ' + name
+        except:
+            c[i] = name
+
+    tmpArr = sorted(c.items())
+    tmpArr.reverse()
+
+    for item in tmpArr:
+        avg_page += item[0]
+        if str(item[0]) == '0':
+            tmpStr = item[1] + ' 1페이지 미만'
+        else:
+            tmpStr = item[1] + ' ' + str(item[0])
+        all_lists.append(tmpStr)
+
+    all_lists.append('<br>')
+    yesterday = '17%02d%02d' % (yday_time.tm_mon, yday_time.tm_mday)
+    now = time.localtime()
+    ss = '17%02d%02d %02d:%02d:%02d' % (now.tm_mon, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec)
+    all_lists.append('* 집계 기간: %s 00:00:00 ~ %s' % (yesterday, ss))
+    all_lists.append('* 평균 페이지 수: %.2f' % (avg_page / 28))
+    return all_lists
 
 def login():
-    user_id = input('아이디: ')
-    user_pw = input('비밀번호: ')
+    user_id = 'id'
+    user_pw = 'password'
     s = requests.session()
     s.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko'
     s.headers['Host'] = 'theqoo.net'
@@ -256,10 +287,9 @@ def json_loading():
     return tmpStr
 
 def main():
-    ss = time.strftime("%y%m%d %H:%M:%S", time.localtime(tmpAWStime))
-
-    yesterday = time.strftime("%y%m%d", tt)
+    ss = time.strftime("%y%m%d %H:%M:%S", time.localtime())
     print('프로그램 실행 시각: ' + str(ss))
+    print('찾을 텍스트: ', findtxt)
 
     q = Queue()
     procs = []
@@ -267,53 +297,24 @@ def main():
     procs.append(Process(target=get_kdol1, args=(q,'bts')))
     procs.append(Process(target=get_kdol1, args=(q,'ifnt')))
     procs.append(Process(target=get_kdol1, args=(q, 'nuest')))
+    procs.append(Process(target=get_kdol1, args=(q, 'wannaone')))
     procs.append(Process(target=get_kdol2, args=(q,)))
     procs.append(Process(target=get_kdol3, args=(q,)))
 
-    # 프로세스 시작
+    # 프로세스 시작 후, 완료까지 대기
     for p in procs: p.start()
     for p in procs: p.join()
 
-    avg_page = 0
-    all_lists = []
-    q = GetItemList(q)
-
-    c = {}
-    for item in q:
-        i = item[0]
-        name = item[1]
-        try:
-            c[i] = c[i] + ', ' + name
-        except:
-            c[i] = name
-
-    tmpArr = sorted(c.items())
-    tmpArr.reverse()
-
-    for item in tmpArr:
-        avg_page += item[0]
-        if str(item[0]) == '0':
-            tmpStr = item[1] + ' 1페이지 미만'
-        else:
-            tmpStr = item[1] + ' ' + str(item[0])
-        all_lists.append(tmpStr)
-
-    all_lists.append('<br>')
-    all_lists.append('* 집계 기간: %s 00:00:00 ~ %s' % (yesterday, ss))
-    all_lists.append('* 평균 페이지 수: %.2f' % (avg_page/24))
-
+    all_lists = SortList(q)
     b = "<br />".join(all_lists)
-    print('\n\n\n')
     print(b)
-    print('\n\n\n')
 
-    s = login()
-    tmpInt = 1
+    session = login()
 
-    xml, mid = make_xml('(테스트중) %s 카테별 페이지수' % yesterday, b, tmpInt)
-    document_srl = write(s, xml)
-    #xml2 = make_xml2(mid, json_loading(), document_srl)
-    #write2(s, xml2, document_srl)
-    return 0
-
+    yesterday = '17%02d%02d' % (yday_time.tm_mon, yday_time.tm_mday)
+    xml, mid = make_xml('%s 카테별 페이지수' % yesterday, b, 2)
+    document_srl = write(session, xml)
+    memo = json_loading()
+    xml2 = make_xml2(mid, memo, document_srl)
+    write2(session, xml2, document_srl)
 if __name__ == "__main__":  main()
