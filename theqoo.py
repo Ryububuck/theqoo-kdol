@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 '''
-Edited on 07/22/2017.
+Created on 07/22/2017.
+Edited on 05/07/2018.
 @author: Ryububuck
 @License: GPL 3.0
 '''
 from bs4 import BeautifulSoup as bs
 from multiprocessing import Process, Queue
 import requests, time, random, json, re
+import sqlite3
+from TheqooAPI import theqoo
 
 now = time.time()
 yday_time = time.localtime(now - 86400) #어제
@@ -20,7 +23,7 @@ def replace_kdol(category):
     if category == '38608002':
         return '<font style=\"color:#79e5cb\">샤이니</font>'
     elif category == '85437064':
-        return '<font style=\"color:#00bf5f\">GOT7</font>'
+        return '<font style=\"color:#c0db3a\">GOT7</font>'
     elif category == '26699':
         return '<font style=\"color:#ff0000\">동방신기</font>'
     elif category == '160145694':
@@ -58,7 +61,7 @@ def replace_kdol(category):
     elif category == '518965544':
         return '<font style=\"color:#1ec91e\">마마무</font>'
     elif category == '518960998':
-        return '<font style=\"color:gold\">골든차일드</font>'
+        return '<font style=\"color:#ffd700\">골든차일드</font>'
     elif category == '490141128':
         return '<font style=\"color:#14bcbc\">데이식스</font>'
     elif category == '490139957':
@@ -69,22 +72,38 @@ def replace_kdol(category):
         return '<font style=\"color:#ff1493\">트와이스</font>'
     elif category == '369461587':
         return '펜타곤'
+    elif category == '525073759':
+        return '<font style=\"color:black\">더보이즈</font>'
+    elif category == '552661373':
+        return '<font style=\"color:black\">정세운</font>'
+    elif category == '560064972':
+        return '<font style=\"color:#3F0099\">이호원</font>'
+    elif category == '610094282':
+        return '<font style=\"color:#ff007f\">JBJ</font>'
+    elif category == '610095075':
+        return '<font style=\"color:#ff007f\">MXM</font>'
+    elif category == '610096101':
+        return '<font style=\"color:#ff007f\">구구단</font>'
+    elif category == '631798964':
+        return '<font style=\"color:#778899\">엑소</font>'
+    elif category == '686532564':
+        return '<font style=\"color:#000000\">H.O.T</font>'
     return category
 
-# 엑소, 잉피, 방탄, 워너원, 늉
+# 세븐틴, 잉피, 방탄, 워너원, 늉
 def get_kdol1(q, kdol):
-    if kdol == 'exo':
-        const_url = 'http://theqoo.net/index.php?mid=exo&filter_mode=normal&page='
-        name = '<b><font style=\"color:#778899\">엑소</font></b>'
-    elif kdol == 'ifnt':
+    if kdol == 'ifnt':
         const_url = 'http://theqoo.net/index.php?mid=infinite&filter_mode=normal&page='
         name = '<b><font style=\"color:#E6CC54\">인피니트</font></b>'
+    elif kdol == 'svt':
+        const_url = 'http://theqoo.net/index.php?mid=kdol&filter_mode=normal&category=160145694&page='
+        name = '<b><font style=\"color:#aaaaff\">세븐틴</font></b>'
     elif kdol == 'nuest':
         const_url = 'http://theqoo.net/index.php?mid=nuest&filter_mode=normal&page='
         name = '<b><font style=\"color:#e81ee8\">뉴이스트</font></b>'
     elif kdol == 'wannaone':
         const_url = 'http://theqoo.net/index.php?mid=wannaone&filter_mode=normal&page='
-        name = '<b>워너원</b>'
+        name = '<b><font style=\"color:black\">워너원</font></b>'
     else:
         const_url = 'http://theqoo.net/index.php?mid=bts&filter_mode=normal&page='
         name = '<b><font style=\"color:#c9c5c5\">방탄소년단</font></b>'
@@ -111,9 +130,9 @@ def get_kdol1(q, kdol):
             q.put([i-1, name])
             return 0
 
-# 샤이니 ~ 소녀시대
+# 엑소 ~ 소녀시대
 def get_kdol2(q):
-    kdol_cate = ['38608002', '85437064', '26699', '160145694', '38659297', '38659328', '186883457', '98188368']
+    kdol_cate = ['631798964', '38608002', '85437064', '26699', '38659297', '38659328', '186883457', '98188368']
 
     s = requests.session()
     s.headers['User-Agent'] = 'Mozilla/5.0 (Linux; U; Android 1.5; de-de; Galaxy Build/CUPCAKE) Mobile Safari/525.20.1'
@@ -147,11 +166,16 @@ def get_kdol3(q):
         '161636969', #위너
         '244186435', #비투비
         '388541893', #여친
-        '347959614', #아스트로
         '490141128',  # 데이식스
         '490139957',  # 몬스타엑스
         '518960998', #골든차일드
-        '518965544' #마마무
+        '518965544', #마마무
+        '525073759', #더보이즈
+        '552661373', #정세운
+        '560064972', #이호원
+        '610094282', #jbj
+        '610095075', #mxm
+        '686532564', #HOT
     ]
 
 
@@ -173,13 +197,17 @@ def get_kdol3(q):
                     break
             i += 1
 
-
 def SortList(q):
+    conn = sqlite3.connect("theqoo.db")
+    cur = conn.cursor()
     avg_page = 0
     all_lists = []
-    ret=[]
+    ret = []
+    db_data = []
+    date = '18%02d%02d' % (yday_time.tm_mon, yday_time.tm_mday)
+    p = re.compile(r'<font style="color:(.+)>(.+)</font>')
 
-    n=q.qsize()
+    n = q.qsize()
     while n > 0:
         ret.append(q.get())
         n -= 1
@@ -188,12 +216,24 @@ def SortList(q):
 
     c = {}
     for item in ret:
+        # 페이지수
         i = item[0]
+        # 카테명 ex) <b><font style="color:#ffaad4">러블리즈</font></b>
         name = item[1]
-        try:
-            c[i] = c[i] + ', ' + name
-        except:
-            c[i] = name
+
+        try:    c[i] = c[i] + ', ' + name
+        except: c[i] = name
+
+        #db 넣기
+        m = p.search(name)
+        db_data.append((m.group(2), i, date))
+
+    #db data 넣기
+    sql = "insert into theqoo(name,page,date) values (?, ?, ?)"
+    cur.executemany(sql, db_data)
+    conn.commit()
+    conn.close()
+
 
     tmpArr = sorted(c.items())
     tmpArr.reverse()
@@ -207,76 +247,12 @@ def SortList(q):
         all_lists.append(tmpStr)
 
     all_lists.append('<br>')
-    yesterday = '17%02d%02d' % (yday_time.tm_mon, yday_time.tm_mday)
+    yesterday = '18%02d%02d' % (yday_time.tm_mon, yday_time.tm_mday)
     now = time.localtime()
-    ss = '17%02d%02d %02d:%02d:%02d' % (now.tm_mon, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec)
+    ss = '18%02d%02d %02d:%02d:%02d' % (now.tm_mon, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec)
     all_lists.append('* 집계 기간: %s 00:00:00 ~ %s' % (yesterday, ss))
-    all_lists.append('* 평균 페이지 수: %.2f' % (avg_page / 28))
+    all_lists.append('* 평균 페이지 수: %.2f' % (avg_page / 33))
     return all_lists
-
-def login():
-    user_id = 'id'
-    user_pw = 'password'
-    s = requests.session()
-    s.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko'
-    s.headers['Host'] = 'theqoo.net'
-
-    url = 'http://theqoo.net/index.php?mid=index&act=dispMemberLoginForm'
-    data = {
-        'error_return_url': '/index.php?mid=index&act=dispMemberLoginForm',
-        'mid': 'index',
-        'vid': '',
-        'ruleset': '@login',
-        'success_return_url': 'http://theqoo.net/',
-        'act': 'procMemberLogin',
-        'xe_validator_id': 'modules/member/skins/sketchbook5_member_skin/1',
-        'user_id': user_id,
-        'password': user_pw
-    }
-    tmp = s.post(url, data=data).text
-    if tmp.find('로그아웃') != -1:
-        print('Login Success!')
-        return s
-    else:
-        print('Login Fail!')
-        login()
-
-def write(s, xml):
-    url = 'http://theqoo.net/index.php?mid=test&act=dispBoardWrite'
-    s.get(url)
-    url = 'http://theqoo.net/index.php'
-    s.headers['Content-Type'] = 'application/xml'
-    s.headers['Referer'] = 'http://theqoo.net/index.php?mid=test&act=dispBoardWrite'
-    tmp = s.post(url, data=xml.encode('utf-8')).text
-    p = re.compile('<document_srl>[0-9]*')
-    m = p.search(tmp)
-    document_srl = m.group().split('<document_srl>')[1]
-    return document_srl
-
-def make_xml(subject, memo, category_srl):
-    if category_srl == '1':
-        mid = 'ktalk'
-        category_srl = 1947874
-    elif category_srl == '2':
-        mid = 'ktalk'
-        category_srl = 21832056
-    else:
-        mid = 'test'
-    xml = """﻿<?xml version="1.0" encoding="UTF-8"?><methodCall><params><_filter><![CDATA[insert]]></_filter><category_srl><![CDATA[""" + str(category_srl) + """]]></category_srl><error_return_url><![CDATA[/index.php?mid=test&act=dispBoardWrite]]></error_return_url><act><![CDATA[procBoardInsertDocument]]></act><mid><![CDATA[""" + mid + """]]></mid><content><![CDATA[""" + memo + """]]></content><title><![CDATA[""" + subject + """]]></title><_saved_doc_message><![CDATA[자동 저장된 글이 있습니다. 복구하시겠습니까? 글을 다 쓰신 후 저장하면 자동 저장 본은 사라집니다.]]></_saved_doc_message><comment_status><![CDATA[ALLOW]]></comment_status><status><![CDATA[PUBLIC]]></status><module><![CDATA[board]]></module></params></methodCall>"""
-    return xml, mid
-
-def write2(s, xml, document_srl):
-    url = 'http://theqoo.net/index.php?mid=test&act=procBoardInsertComment'
-    s.get(url)
-    url = 'http://theqoo.net/index.php'
-    s.headers['Content-Type'] = 'application/xml'
-    s.headers['Referer'] = 'http://theqoo.net/index.php?mid=test&act=procBoardInsertComment'
-    tmp = s.post(url, data=xml.encode('utf-8')).text
-    print('http://theqoo.net/' + str(document_srl))
-
-def make_xml2(mid, memo, document_srl):
-    xml = """<?xml version="1.0" encoding="utf-8" ?><methodCall><params><_filter><![CDATA[insert_comment]]></_filter><error_return_url><![CDATA[/index.php?mid=""" + mid + """&filter_mode=normal&document_srl=""" + document_srl + """]]></error_return_url><mid><![CDATA[""" + mid + """]]></mid><document_srl><![CDATA[""" + document_srl + """]]></document_srl><content><![CDATA[""" + memo + """]]></content><module><![CDATA[board]]></module><act><![CDATA[procBoardInsertComment]]></act></params></methodCall>"""
-    return xml
 
 def json_loading():
     json_load = requests.get('http://lovelyz.gtz.kr/theqoo.json').text
@@ -293,7 +269,7 @@ def main():
 
     q = Queue()
     procs = []
-    procs.append(Process(target=get_kdol1, args=(q,'exo')))
+    procs.append(Process(target=get_kdol1, args=(q, 'svt')))
     procs.append(Process(target=get_kdol1, args=(q,'bts')))
     procs.append(Process(target=get_kdol1, args=(q,'ifnt')))
     procs.append(Process(target=get_kdol1, args=(q, 'nuest')))
@@ -309,12 +285,25 @@ def main():
     b = "<br />".join(all_lists)
     print(b)
 
-    session = login()
+    yesterday = '18%02d%02d' % (yday_time.tm_mon, yday_time.tm_mday)
 
-    yesterday = '17%02d%02d' % (yday_time.tm_mon, yday_time.tm_mday)
-    xml, mid = make_xml('%s 카테별 페이지수' % yesterday, b, 2)
-    document_srl = write(session, xml)
+    Theqoo = theqoo()
+
+    draft = {
+        'mid': 'ktalk',
+        'subject': '%s 카테별 페이지수' % yesterday,
+        'memo': b,
+        'comment': '댓글 내용',
+        'category_srl': '2'
+    }
+
+    document_srl = Theqoo.write(draft)
+    print('http://theqoo.net/' + str(document_srl))
+
+    # Write Comment
+    '''
     memo = json_loading()
     xml2 = make_xml2(mid, memo, document_srl)
     write2(session, xml2, document_srl)
+    '''
 if __name__ == "__main__":  main()
