@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 '''
-Edited on 05/06/2018.
+@Edited on 05/06/2018.
 @author: Ryububuck
 @License: GPL 3.0
 '''
-
-THEQOO_ID =  #YOUR THEQOO ID
-THEQOO_PW =  #YOUR THEQOO PW
-
-INIT_URL = 'http://theqoo.net/index.php'
 from bs4 import BeautifulSoup as bs
 from multiprocessing import Process, Queue
 import requests, time, random, json, re
+THEQOO_ID = 'YOUR THEQOO ID'
+THEQOO_PW = 'YOUR THEQOO PW'
 
-class theqoo():
+INIT_URL = 'http://theqoo.net/index.php'
+
+
+class Theqoo:
     def __init__(self):
         self.s = requests.session()
         self.s.heaedrs = {
@@ -50,12 +50,13 @@ class theqoo():
         tmp = self.s.post(url, data=xml.encode('utf-8')).text
         return get_document_srl(tmp)
 
-
     def writeComment(self, s, xml, document_srl):
         url = '{}'.format(INIT_URL)
         s.headers['Referer'] = '{}?mid=test&act=procBoardInsertComment'.format(INIT_URL)
-        s.post(url, data=xml.encode('utf-8')).text
+        res = s.post(url, data=xml.encode('utf-8'))
         print('http://theqoo.net/' + str(document_srl))
+        return res.status_code
+
 
 def get_document_srl(txt):
     p = re.compile('<document_srl>[0-9]*')
@@ -64,7 +65,7 @@ def get_document_srl(txt):
     return document_srl
 
 
-#Write Document XML
+# Write Document XML
 def make_xml(subject, memo, category_srl):
     if category_srl == '1':
         mid = 'ktalk'
@@ -79,15 +80,16 @@ def make_xml(subject, memo, category_srl):
           .format(category_srl, mid, memo, subject)
     return xml, mid
 
-#Write Comment XML
+
+# Write Comment XML
 def make_xml2(mid, memo, document_srl):
     xml = """<?xml version="1.0" encoding="utf-8" ?><methodCall><params><_filter><![CDATA[insert_comment]]></_filter><error_return_url><![CDATA[/index.php?mid={}&filter_mode=normal&document_srl={}]]></error_return_url><mid><![CDATA[{}]]></mid><document_srl><![CDATA[{}]]></document_srl><content><![CDATA[{}]]></content><module><![CDATA[board]]></module><act><![CDATA[procBoardInsertComment]]></act></params></methodCall>"""\
-    .format(mid, document_srl, mid, document_srl, memo)
+        .format(mid, document_srl, mid, document_srl, memo)
     return xml
 
 
 def main():
-    Theqoo = theqoo()
+    theqoo = Theqoo()
 
     draft = {
         'mid': 'ktalk',
@@ -97,13 +99,9 @@ def main():
         'category_srl': '3'
     }
 
-    document_srl = Theqoo.write(draft)
+    document_srl = theqoo.write(draft)
     print('http://theqoo.net/' + str(document_srl))
 
-    # Write Comment
-    '''
-    memo = json_loading()
-    xml2 = make_xml2(mid, memo, document_srl)
-    writeComment(session, xml2, document_srl)
-    '''
-if __name__ == "__main__":  main()
+
+if __name__ == "__main__":
+    main()
