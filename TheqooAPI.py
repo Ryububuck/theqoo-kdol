@@ -21,9 +21,9 @@ class Theqoo:
             'Host': 'theqoo.net'
         }
 
-        url = '{}?mid=index&act=dispMemberLoginForm'.format(INIT_URL)
+        url = '{}?mid=cate_index&act=dispMemberLoginForm'.format(INIT_URL)
         data = {
-            'error_return_url': '/index.php?mid=index&act=dispMemberLoginForm',
+            'error_return_url': '/index.php?mid=cate_index&act=dispMemberLoginForm',
             'mid': 'index',
             'vid': '',
             'ruleset': '@login',
